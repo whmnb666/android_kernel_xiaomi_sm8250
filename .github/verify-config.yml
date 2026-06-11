@@ -1,0 +1,36 @@
+name: Verify Defconfig
+on:
+  workflow_dispatch:
+    inputs:
+      device:
+        default: 'apollo'
+        type: string
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+uses: actions/checkout@v6
+
+        
+with:
+          fetch-depth: 1
+name: deps
+
+        
+run: sudo apt-get update && sudo apt-get install -y bison flex libssl-dev
+name: gen config
+
+        
+run: |
+          make ARCH=arm64 O=out ${{ inputs.device }}_defconfig
+          make ARCH=arm64 O=out olddefconfig
+name: check
+
+        
+run: |
+          need="CONFIG_NAMESPACES CONFIG_PID_NS CONFIG_UTS_NS CONFIG_IPC_NS CONFIG_NET_NS CONFIG_SYSVIPC CONFIG_POSIX_MQUEUE CONFIG_SECCOMP CONFIG_SECCOMP_FILTER CONFIG_CGROUPS CONFIG_CGROUP_DEVICE CONFIG_CGROUP_PIDS CONFIG_MEMCG CONFIG_CGROUP_SCHED CONFIG_CGROUP_FREEZER CONFIG_DEVTMPFS CONFIG_OVERLAY_FS CONFIG_VETH CONFIG_BRIDGE CONFIG_NF_NAT CONFIG_NF_TABLES CONFIG_NETFILTER_XT_MATCH_ADDRTYPE CONFIG_NF_CONNTRACK_NETLINK"
+          fail=0
+          for c in $need; do
+            if grep -q "^$c=y" out/.config; then echo "OK  $c"; else echo "MISSING $c"; fail=1; fi
+          done
+          exit $fail
