@@ -120,6 +120,15 @@ echo "Integrating Baseband-guard..."
 curl -LSs "https://github.com/vc-teahouse/Baseband-guard/raw/main/setup.sh" | bash
 sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/selinux/selinux,baseband_guard/ } }' security/Kconfig
 
+# === DroidSpaces non-GKI patches ===
+if [ ! -d "/tmp/droidspaces" ]; then
+  echo "Cloning DroidSpaces..."
+  git clone --depth=1 https://github.com/ravindu644/Droidspaces-OSS.git /tmp/droidspaces
+fi
+for p in /tmp/droidspaces/Documentation/resources/kernel-patches/non-GKI/*.patch; do
+  [ -f "$p" ] && patch -p1 --forward < "$p" || true
+done
+
 echo "Cleaning..."
 
 rm -rf out/
@@ -155,6 +164,20 @@ fi
 
 scripts/config --file out/.config \
     -e BBG
+scripts/config --file out/.config \
+    -e SYSCTL -e SYSVIPC -e POSIX_MQUEUE \
+    -e NAMESPACES -e PID_NS -e UTS_NS -e IPC_NS -e NET_NS \
+    -e SECCOMP -e SECCOMP_FILTER \
+    -e CGROUPS -e CGROUP_DEVICE -e CGROUP_PIDS -e MEMCG \
+    -e CGROUP_SCHED -e FAIR_GROUP_SCHED -e CGROUP_FREEZER \
+    -e CGROUP_NET_PRIO -e DEVTMPFS -e OVERLAY_FS \
+    -e VETH -e BRIDGE -e BRIDGE_NETFILTER \
+    -e NF_CONNTRACK -e IP_NF_IPTABLES -e IP_NF_FILTER \
+    -e NF_NAT -e NF_TABLES -e IP_NF_TARGET_MASQUERADE \
+    -e NETFILTER_XT_TARGET_MASQUERADE -e NETFILTER_XT_MATCH_ADDRTYPE \
+    -e NF_CONNTRACK_NETLINK -e NF_NAT_REDIRECT \
+    -e NF_CONNTRACK_IPV4 -e NF_NAT_IPV4 -e IP_NF_NAT \
+    -d ANDROID_PARANOID_NETWORK
 
 scripts/config --file out/.config \
     -e REKERNEL \
@@ -298,6 +321,20 @@ fi
 
 scripts/config --file out/.config \
     -e BBG
+scripts/config --file out/.config \
+    -e SYSCTL -e SYSVIPC -e POSIX_MQUEUE \
+    -e NAMESPACES -e PID_NS -e UTS_NS -e IPC_NS -e NET_NS \
+    -e SECCOMP -e SECCOMP_FILTER \
+    -e CGROUPS -e CGROUP_DEVICE -e CGROUP_PIDS -e MEMCG \
+    -e CGROUP_SCHED -e FAIR_GROUP_SCHED -e CGROUP_FREEZER \
+    -e CGROUP_NET_PRIO -e DEVTMPFS -e OVERLAY_FS \
+    -e VETH -e BRIDGE -e BRIDGE_NETFILTER \
+    -e NF_CONNTRACK -e IP_NF_IPTABLES -e IP_NF_FILTER \
+    -e NF_NAT -e NF_TABLES -e IP_NF_TARGET_MASQUERADE \
+    -e NETFILTER_XT_TARGET_MASQUERADE -e NETFILTER_XT_MATCH_ADDRTYPE \
+    -e NF_CONNTRACK_NETLINK -e NF_NAT_REDIRECT \
+    -e NF_CONNTRACK_IPV4 -e NF_NAT_IPV4 -e IP_NF_NAT \
+    -d ANDROID_PARANOID_NETWORK
 
 scripts/config --file out/.config \
     --set-str STATIC_USERMODEHELPER_PATH /system/bin/micd \
