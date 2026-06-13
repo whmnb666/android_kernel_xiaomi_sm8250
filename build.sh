@@ -120,15 +120,6 @@ echo "Integrating Baseband-guard..."
 curl -LSs "https://github.com/vc-teahouse/Baseband-guard/raw/main/setup.sh" | bash
 sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/selinux/selinux,baseband_guard/ } }' security/Kconfig
 
-# === DroidSpaces non-GKI patches ===
-if [ ! -d "/tmp/droidspaces" ]; then
-  echo "Cloning DroidSpaces..."
-  git clone --depth=1 https://github.com/ravindu644/Droidspaces-OSS.git /tmp/droidspaces
-fi
-for p in /tmp/droidspaces/Documentation/resources/kernel-patches/non-GKI/*.patch; do
-  [ -f "$p" ] && patch -p1 --forward < "$p" || true
-done
-
 echo "Cleaning..."
 
 rm -rf out/
@@ -176,7 +167,6 @@ scripts/config --file out/.config \
     -e NF_NAT -e NF_TABLES -e IP_NF_TARGET_MASQUERADE \
     -e NETFILTER_XT_TARGET_MASQUERADE -e NETFILTER_XT_MATCH_ADDRTYPE \
     -e NF_CONNTRACK_NETLINK -e NF_NAT_REDIRECT \
-    -e NF_CONNTRACK_IPV4 -e NF_NAT_IPV4 -e IP_NF_NAT \
     -d ANDROID_PARANOID_NETWORK
 
 scripts/config --file out/.config \
@@ -333,7 +323,6 @@ scripts/config --file out/.config \
     -e NF_NAT -e NF_TABLES -e IP_NF_TARGET_MASQUERADE \
     -e NETFILTER_XT_TARGET_MASQUERADE -e NETFILTER_XT_MATCH_ADDRTYPE \
     -e NF_CONNTRACK_NETLINK -e NF_NAT_REDIRECT \
-    -e NF_CONNTRACK_IPV4 -e NF_NAT_IPV4 -e IP_NF_NAT \
     -d ANDROID_PARANOID_NETWORK
 
 scripts/config --file out/.config \
