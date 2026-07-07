@@ -230,7 +230,6 @@ scripts/config --file out/.config \
     -e BINDER_OPT \
     -e KPERFEVENTS \
     -e MILLET \
-    -e PERF_HUMANTASK \
     -d LTO_CLANG \
     -e LTO_NONE \
     -e SF_BINDER \
