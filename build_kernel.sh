@@ -289,7 +289,7 @@ build_target() {
                 exit 1
             fi
         done
-        if ! grep -qx '# CONFIG_ANDROID_PARANOID_NETWORK is not set' "${OUT_DIR}/.config"; then
+        if grep -Eq '^CONFIG_ANDROID_PARANOID_NETWORK=[ym]$' "${OUT_DIR}/.config"; then
             echo "[!] Android GID-based networking restrictions are still enabled."
             exit 1
         fi
