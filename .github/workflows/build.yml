@@ -1,98 +1,97 @@
-name: Build Kernel
+name: Build Droidspaces Apollo
 
 on:
+  push:
+    branches:
+      - droidspaces-apollo
   workflow_dispatch:
-    inputs:
-      device:
-        description: 'Target Device Code (设备代号)'
-        required: true
-        default: 'lmi'
-        type: choice
-        options:
-          - alioth
-          - apollo
-          - cas
-          - cmi
-          - dagu
-          - elish
-          - enuma
-          - lmi
-          - munch
-          - pipa
-          - psyche
-          - thyme
-          - umi
-      ksu:
-        description: 'Enable KernelSU (ReSukiSU)'
-        required: true
-        type: boolean
-        default: false
-      target_os:
-        description: 'Target OS (目标系统)'
-        required: true
-        type: choice
-        default: 'both'
-        options:
-          - aosp
-          - miui
-          - both
+
+permissions:
+  contents: read
 
 jobs:
   build-kernel:
-    name: Build ${{ github.event.inputs.device }} | KSU:${{ github.event.inputs.ksu }} | OS:${{ github.event.inputs.target_os }}
-    runs-on: ubuntu-latest
-    
+    name: Apollo | MIUI | ReSukiSU | Droidspaces
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v7
-      with:
-        fetch-depth: 1
+      - name: Checkout source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 1
+          persist-credentials: false
 
-    - name: Set up Environment
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y bc bison build-essential ccache curl flex gawk \
-          git gnupg gperf imagemagick libncurses-dev \
-          lib32readline-dev lib32z1-dev liblz4-tool \
-          libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync \
-          schedtool squashfs-tools xsltproc zip zlib1g-dev python3
-          
-    - name: Cache ccache
-      uses: actions/cache@v6
-      with:
-        path: ~/.cache/ccache_mikernel
-        key: ${{ runner.os }}-kernel-ccache-${{ github.event.inputs.device }}-${{ github.run_id }}
-        restore-keys: |
-          ${{ runner.os }}-kernel-ccache-${{ github.event.inputs.device }}-
-          ${{ runner.os }}-kernel-ccache-
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential ccache cpio curl flex \
+            gawk git libelf-dev libssl-dev libncurses-dev lz4 lzop \
+            python-is-python3 rsync unzip zip \
+            gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
+          CCACHE_DIR="$HOME/.cache/ccache_mikernel" ccache -M 2G
 
-    - name: Setup zyc-clang 16 Toolchain
-      run: |
-        mkdir -p $HOME/zyc-clang
-        cd $HOME/zyc-clang
-        wget -q https://github.com/ZyCromerZ/Clang/releases/download/16.0.6-20260807-release/Clang-16.0.6-20260807.tar.gz
-        tar -zxvf Clang-16.0.6-20260807.tar.gz
+      - name: Cache compiler results
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ~/.cache/ccache_mikernel
+          key: droidspaces-apollo-miui-ksu-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            droidspaces-apollo-miui-ksu-${{ runner.os }}-
 
-    - name: Run Build Script
-      run: |
-        chmod +x build_kernel.sh
-        
-        ARGS="${{ github.event.inputs.device }}"
-        
-        if [ "${{ github.event.inputs.ksu }}" == "true" ]; then
-          ARGS="$ARGS ksu"
-        fi
-        
-        if [ "${{ github.event.inputs.target_os }}" != "both" ]; then
-          ARGS="$ARGS ${{ github.event.inputs.target_os }}"
-        fi
-        
-        echo "Executing command: ./build_kernel.sh $ARGS"
-        ./build_kernel.sh $ARGS
+      - name: Install verified Clang 16 toolchain
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$HOME/zyc-clang"
+          gh release download 16.0.6-20260807-release --repo ZyCromerZ/Clang \
+            --pattern Clang-16.0.6-20260807.tar.gz --dir "$RUNNER_TEMP"
+          printf '%s  %s\n' \
+            c11341a58e15cebc4e25472291791ae6a5dceb3675c9dfde2cb035ad893b6ae0 \
+            "$RUNNER_TEMP/Clang-16.0.6-20260807.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/Clang-16.0.6-20260807.tar.gz" -C "$HOME/zyc-clang"
 
-    - name: Upload Flashable ZIP
-      uses: actions/upload-artifact@v7
-      with:
-        name: APTKernel-${{ github.event.inputs.device }}-${{ github.event.inputs.target_os }}-${{ github.run_id }}
-        path: APTKernel_*.zip
-        compression-level: 0 # 已经被 zip 压缩过，无需再二次压缩
+      - name: Build Apollo MIUI with ReSukiSU
+        run: |
+          set -o pipefail
+          bash build_kernel.sh apollo ksu miui 2>&1 | tee build.log
+
+      - name: Verify embedded configuration and packaged images
+        run: |
+          bash scripts/extract-ikconfig out_miui/arch/arm64/boot/Image > kernel-miui.config
+          cmp out_miui/.config kernel-miui.config
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+          archives = list(Path('.').glob('APTKernel_*.zip'))
+          if len(archives) != 1:
+              raise SystemExit(f'Expected one kernel ZIP, got {len(archives)}')
+          with ZipFile(archives[0]) as archive:
+              for name in ('Image', 'dtb', 'dtbo.img'):
+                  if archive.getinfo(f'kernels/miui/{name}').file_size == 0:
+                      raise SystemExit(f'Empty kernel artifact: {name}')
+          PY
+          sha256sum APTKernel_*.zip > SHA256SUMS
+
+      - name: Upload verified kernel
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: Droidspaces-apollo-MIUI-ReSukiSU-${{ github.run_id }}
+          path: |
+            APTKernel_*.zip
+            kernel-miui.config
+            SHA256SUMS
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: Droidspaces-apollo-build-log-${{ github.run_id }}
+          path: |
+            build.log
+            out_miui/.config
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14

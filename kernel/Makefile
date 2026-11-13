@@ -135,7 +135,7 @@ ifeq ($(CONFIG_XIAOMI_MIUI),y)
 ifeq ($(CONFIG_MACH_XIAOMI_ALIOTH),y)
 $(obj)/config_data.gz: arch/arm64/configs/alioth_stock-defconfig FORCE
 else ifeq ($(CONFIG_MACH_XIAOMI_APOLLO),y)
-$(obj)/config_data.gz: arch/arm64/configs/apollo_stock-defconfig FORCE
+$(obj)/config_data.gz: $(KCONFIG_CONFIG) FORCE
 else ifeq ($(CONFIG_MACH_XIAOMI_CAS),y)
 $(obj)/config_data.gz: arch/arm64/configs/cas_stock-defconfig FORCE
 else ifeq ($(CONFIG_MACH_XIAOMI_CMI),y)
@@ -168,7 +168,7 @@ else
 ifeq ($(CONFIG_MACH_XIAOMI_ALIOTH),y)
 $(obj)/config_data.gz: arch/arm64/configs/AOSP_defconfig/alioth_stock-defconfig FORCE
 else ifeq ($(CONFIG_MACH_XIAOMI_APOLLO),y)
-$(obj)/config_data.gz: arch/arm64/configs/AOSP_defconfig/apollo_stock-defconfig FORCE
+$(obj)/config_data.gz: $(KCONFIG_CONFIG) FORCE
 else ifeq ($(CONFIG_MACH_XIAOMI_CMI),y)
 $(obj)/config_data.gz: arch/arm64/configs/AOSP_defconfig/cmi_stock-defconfig FORCE
 else ifeq ($(CONFIG_MACH_XIAOMI_LMI),y)

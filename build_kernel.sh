@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Exit on any error
-set -e
+set -eo pipefail
 
 # ==========================================
 # Argument Parsing
@@ -75,8 +75,10 @@ if [ "$ENABLE_KSU" -eq 1 ]; then
     echo "==========================================="
     echo " [*] Initializing KernelSU (ReSukiSU) Setup"
     echo "==========================================="
-    echo "[*] Downloading and running ReSukiSU remote setup script..."
-    curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash
+    echo "[*] Installing release-era ReSukiSU..."
+    KSU_REF=93a08ffcbb7d0f6bd3946c0b6f28720f9d1e2065
+    curl -fLSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/${KSU_REF}/kernel/setup.sh" | bash -s -- "$KSU_REF"
+    test "$(git -C KernelSU rev-parse HEAD)" = "$KSU_REF"
     echo "[+] KernelSU setup finished."
 fi
 
@@ -86,8 +88,12 @@ fi
 echo "==========================================="
 echo " [*] Initializing Baseband-guard Setup"
 echo "==========================================="
-echo "[*] Downloading and running Baseband-guard remote setup script..."
-wget -O- https://github.com/vc-teahouse/Baseband-guard/raw/main/setup.sh | bash
+echo "[*] Installing release-era Baseband-guard..."
+BBG_REF=a54e0dc6cf0aff4dd87fec49644a02d2eb612905
+git clone https://github.com/vc-teahouse/Baseband-guard Baseband-guard
+git -C Baseband-guard checkout --detach "$BBG_REF"
+bash Baseband-guard/setup.sh "$BBG_REF"
+test "$(git -C Baseband-guard rev-parse HEAD)" = "$BBG_REF"
 
 echo "[*] Patching security/Kconfig for baseband_guard..."
 sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/selinux/selinux,baseband_guard/ } }' security/Kconfig
@@ -101,9 +107,14 @@ echo "==========================================="
 echo " [*] Initializing AnyKernel3 Workspace"
 echo "==========================================="
 rm -rf anykernel
-echo "[*] Cloning AnyKernel3..."
-git clone https://github.com/AstideLabs/AnyKernel3 -b kona --single-branch --depth=1 anykernel
-echo "[+] AnyKernel3 cloned successfully."
+echo "[*] Restoring the release AnyKernel3 template..."
+AK3_ZIP=$(mktemp --suffix=.zip)
+curl -fL "https://github.com/AstideLabs/android_kernel_xiaomi_sm8250/releases/download/v20260821-a8adb967/APTKernel_MIUI_apollo_ReSukiSU-SuSFS_20260821_102334_anykernel3_a8adb967.zip" -o "$AK3_ZIP"
+printf '%s  %s\n' f9f19e0fb055041736ba375424efd31b2f1d21dfa1d13ffcb4ea281590c85c96 "$AK3_ZIP" | sha256sum -c -
+mkdir anykernel
+unzip -q "$AK3_ZIP" -d anykernel -x 'kernels/*'
+rm -f "$AK3_ZIP"
+echo "[+] AnyKernel3 template restored."
 echo "[*] Adjusting AnyKernel3..."
 sed -i "s/^device\.name1=.*/device.name1=${DEVICE_NAME}/" anykernel/anykernel.sh
 echo "[*] AnyKernel3 adjusted successfully."
@@ -262,6 +273,31 @@ build_target() {
     # We always need to re-evaluate dependencies because BBG is injected unconditionally
     echo "[*] Updating config (make olddefconfig)..."
     make "${MAKE_OPTS[@]}" olddefconfig
+
+    if [ "$DEVICE_NAME" = "apollo" ]; then
+        for option in SYSVIPC POSIX_MQUEUE SYSCTL NAMESPACES UTS_NS IPC_NS \
+            PID_NS USER_NS NET_NS DEVTMPFS FHANDLE IKCONFIG IKCONFIG_PROC \
+            CGROUPS CGROUP_DEVICE CGROUP_PIDS CGROUP_NET_PRIO CGROUP_FREEZER \
+            CGROUP_SCHED FAIR_GROUP_SCHED CFS_BANDWIDTH MEMCG \
+            SECCOMP SECCOMP_FILTER OVERLAY_FS TMPFS_POSIX_ACL TMPFS_XATTR \
+            VETH BRIDGE BRIDGE_NETFILTER NETFILTER NF_CONNTRACK NF_CT_NETLINK \
+            NF_TABLES NF_NAT IP_NF_IPTABLES IP_NF_FILTER IP_NF_NAT \
+            IP_NF_TARGET_MASQUERADE NETFILTER_XT_MATCH_ADDRTYPE \
+            IP6_NF_NAT IP6_NF_TARGET_MASQUERADE; do
+            if ! grep -qx "CONFIG_${option}=y" "${OUT_DIR}/.config"; then
+                echo "[!] Required Droidspaces option is missing: CONFIG_${option}=y"
+                exit 1
+            fi
+        done
+        if ! grep -qx '# CONFIG_ANDROID_PARANOID_NETWORK is not set' "${OUT_DIR}/.config"; then
+            echo "[!] Android GID-based networking restrictions are still enabled."
+            exit 1
+        fi
+        if [ "$ENABLE_KSU" -eq 1 ]; then
+            grep -qx 'CONFIG_KSU=y' "${OUT_DIR}/.config"
+            grep -qx 'CONFIG_KSU_SUSFS=y' "${OUT_DIR}/.config"
+        fi
+    fi
 
     # ----------------------------------------------------
     # Compilation
